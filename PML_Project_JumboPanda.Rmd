@@ -1,0 +1,111 @@
+---
+title: "PML_Project"
+author: "Jumbo Panda"
+date: "2/26/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Practical Machine Learning Project
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks.  
+
+In this project, my goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict how well a certain exercise was done on a scale of A to E. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+# Load & Clean Data
+Load Libraries:
+```{r load_libs, warning=FALSE, message=FALSE}
+library(caret); library(rattle); library(rpart); library(rpart.plot)
+library(randomForest); library(repmis)
+```
+
+Read in data from URLs provided. More information on data is here: http://groupware.les.inf.puc-rio.br/har.
+As data is loaded, various formats of missing data are coded as NA.
+```{r download_data, echo=FALSE}
+train <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", na.strings = c("NA", "#DIV/0!", ""))
+test <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", na.strings = c("NA", "#DIV/0!", ""))
+```
+
+Remove irrelevant predictors:  The first 7 columns did not add any prediction value to the dependent classe variable.  Because of the quantity of variables in the data set, no descriptives are shown.  Hoewever, through inspection, removing empty columns and the first seven columns was the approach taken to clean the data:
+```{r clean_data, echo=FALSE}
+train <- train[, -c(1:7)]
+train <- train[, colSums(is.na(train)) == 0]
+test <- test[, colSums(is.na(test)) == 0]
+```
+
+# Split training data into training and validation.
+Data is split into two parts: train and test.  Below, the train data is split further to faciliate validation testing.
+```{r split_data}
+set.seed(1234) 
+inTrain = createDataPartition(train$classe, p = .7)[[1]]
+training = train[inTrain,]
+validating = train[-inTrain,]
+```
+
+# Build Predictive Models
+Build cross-validation parameters - limiting to 3-Fold Cross Validataion to save processing time here.
+```{r build_cv}
+control <- trainControl(method = "cv", number = 3)
+```
+
+## RPART Model
+Becaue our dependent variable is categorical (A through E) we cannot use linear models.  The first attempt at a model will be to use a rpart model using the above defined CV parameters:
+```{r rpart, cache=TRUE}
+fit_rpart <- train(classe ~ ., data = training, method = "rpart", 
+                   trControl = control)
+print(fit_rpart, digits = 4)
+fancyRpartPlot(fit_rpart$finalModel)
+```
+
+We use the prediction object to predict on the validation data set:
+```{r rpart_predict}
+# predict outcomes using validation set
+predict_rpart <- predict(fit_rpart, validating)
+```
+
+However, the accuracy is low.
+```{r rpart_confusion}
+# Show prediction result
+(conf_rpart <- confusionMatrix(validating$classe, predict_rpart))
+```
+
+Overall accuracy is:
+```{r rpart_accuracy}
+(accuracy_rpart <- conf_rpart$overall[1])
+```
+
+## Random Forest Model
+In an effort to improve accuracy a Random Forest Model is generated:
+```{r rf_model, cache=TRUE}
+fit_rf <- train(classe ~ ., data = training, method = "rf", 
+                trControl = control)
+print(fit_rf, digits = 3)
+```
+
+Again we use the Random Forest prediction object to predict on the validation data set.  This RF model is much better at predicting the Classe variable.
+```{r rf_predict}
+# predict outcomes using validation set
+predict_rf <- predict(fit_rf, validating)
+# Show prediction result
+(conf_rf <- confusionMatrix(validating$classe, predict_rf))
+```
+
+The RF Overall Accuracy is over 99% so this model is chosen as the final model:
+```{r rf_accuracy}
+# Predict model on Test data
+(accuracy_rf <- conf_rf$overall[1])
+```
+
+## Make Final Prediction
+To complete the project we apply the superior RF prediction object on the Test data set to predict the 20 outcomes:
+```{r rf_predict_test}
+(predict(fit_rf, test))
+```
+
+
+
+
+
